@@ -10,19 +10,101 @@ library(plotly)
 library(tidyverse)
 library(stringr)
 
-colours_1 <- list(blue = "#3775b7", gold = "#b7a837", red = "#b73757")
-colours_2 <- list(blue = "#3775b7", purple = "#5737b7", green = "#37b779",
-                  grey = "#e9e9e9")
+colours <- list(blue = "#3775b7", purple = "#5737b7", green = "#37b779",
+                grey = "#e9e9e9",  gold = "#b7a837", red = "#b73757")
 ```
 
 ```{r data, include=FALSE}
-ufc <- read_csv("data/fight_results.csv")
+ufc <- read_csv(
+  "https://github.com/SamEdwardes/ufc-data/raw/master/fight_results.csv",
+  col_types = cols()
+)
 ufc <- ufc %>%
   mutate(date = lubridate::mdy(date))
 n_fights <- nrow(ufc)
 first_date <- min(ufc$date)
 last_date <- max(ufc$date)
+
+# data wrangling
+
+ufc <- ufc %>%
+  mutate(win_method_bin = case_when(
+    str_detect(win_method, "DEC") ~ "Judge's Decision",
+    str_detect(win_method, "TKO") ~ "Technical Knock Out (TKO)",
+    str_detect(win_method, "SUB") ~ "Submission",
+    TRUE ~ "Other")
+  )
+
+
+# summaries
+
+df_win_types <- as_tibble(janitor::tabyl(ufc, win_method_bin))
+
+df_win_types_judges <- ufc %>%
+  filter(win_method_bin == "Judge's Decision") %>%
+  janitor::tabyl(win_method) %>%
+  as_tibble() 
+
+percent_finish <- df_win_types %>% 
+  filter(win_method_bin == "Technical Knock Out (TKO)" | win_method_bin == "Submission") %>%
+  select(percent) %>%
+  pull() %>%
+  sum()
+
+percent_judges <- df_win_types %>% 
+  filter(win_method_bin == "Judge's Decision") %>%
+  select(percent) %>%
+  pull()
+
+percent_unanimous <- df_win_types_judges %>%
+  filter(win_method == "U-DEC") %>%
+  select(percent) %>%
+  pull()
+
+
+# plots
+
+fig_win_types <- ggplot(df_win_types, aes(x = win_method_bin, y = percent)) +
+  geom_col(fill = colours$blue) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "How do UFC Fights End?",
+       subtitle = paste0("All fights from ", first_date, " to ", last_date),
+       x = "Win Method",
+       y = element_blank())
+
+fig_judge_outcomes <- df_win_types_judges %>%
+  ggplot(aes(x = win_method, y = percent)) + 
+  geom_col(fill = colours$blue) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Breakdown of Judge Outcomes",
+       subtitle = paste0("All fights from ", first_date, " to ", last_date),
+       x = "Win Method",
+       y = element_blank())
 ```
+
+When a UFC match ends with a knock-out or submission there is usually never any doubt who the better fighter was. But only `r percent_finish * 100`% of fights end so decisvely. The other `r percent_judges * 100` of fights go to the judges score cards.
+
+```{r win types plot}
+fig_win_types
+```
+
+At least when the fights do go to the judges scorecard, it appears that the judges are usually pretty confident. The judges are unanimous in their decision`r percent_unanimous * 100`% of the time.
+
+```{r}
+fig_judge_outcomes
+```
+
+
+But, judging is tricky business. It frequenly the subject of public scrutiny.
+
+How can we assess if the judging if fair? Are the judges really selecting the better fighter? Are they correctly applying the UFC rules to select the winner?
+
+To answer this question...
+
+
+########
+########
+
 
 The Ultimate Fighting Championship (UFC) is the world's premier mixed martial arts (MMA) promotion. The world's best fighters compete to call themsevles UFC champions.
 
@@ -46,7 +128,7 @@ ufc <- ufc %>%
 df_win_types <- as_tibble(janitor::tabyl(ufc, win_method_bin))
 
 fig_win_types <- ggplot(df_win_types, aes(x = win_method_bin, y = percent)) +
-  geom_col(fill = colours_2$blue) +
+  geom_col(fill = colours$blue) +
   scale_y_continuous(labels = scales::percent) +
   labs(title = "How do UFC Fights End?",
        subtitle = paste0("All fights from ", first_date, " to ", last_date),
