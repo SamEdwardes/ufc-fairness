@@ -8,6 +8,8 @@ knitr::opts_chunk$set(echo = FALSE)
 options(digits=2)
 library(plotly) 
 library(tidyverse)
+library(modeldata)
+library(recipes)
 library(stringr)
 
 colours <- list(blue = "#3775b7", purple = "#5737b7", green = "#37b779",
@@ -20,7 +22,13 @@ ufc <- read_csv(
   col_types = cols()
 )
 ufc <- ufc %>%
-  mutate(date = lubridate::mdy(date))
+  mutate(date = lubridate::mdy(date)) %>%
+  mutate(event_name_fighters = paste0(event_name, ": ", 
+                                      fighter_1_name, " vs. ", 
+                                      fighter_2_name)) %>%
+  mutate(event_name_fighters = stringr::str_replace_all(event_name_fighters, "_", " ")) %>%
+  mutate(event_name_fighters = stringr::str_replace_all(event_name_fighters, "-", " - "))
+
 n_fights <- nrow(ufc)
 first_date <- min(ufc$date)
 last_date <- max(ufc$date)
@@ -80,134 +88,7 @@ fig_judge_outcomes <- df_win_types_judges %>%
        subtitle = paste0("All fights from ", first_date, " to ", last_date),
        x = "Win Method",
        y = element_blank())
-```
 
-When a UFC match ends with a knock-out or submission there is usually never any doubt who the better fighter was. But only `r percent_finish * 100`% of fights end so decisvely. The other `r percent_judges * 100` of fights go to the judges score cards.
-
-```{r win types plot}
-fig_win_types
-```
-
-At least when the fights do go to the judges scorecard, it appears that the judges are usually pretty confident. The judges are unanimous in their decision`r percent_unanimous * 100`% of the time.
-
-```{r}
-fig_judge_outcomes
-```
-
-
-But, judging is tricky business. It frequenly the subject of public scrutiny.
-
-How can we assess if the judging if fair? Are the judges really selecting the better fighter? Are they correctly applying the UFC rules to select the winner?
-
-To answer this question...
-
-
-########
-########
-
-
-The Ultimate Fighting Championship (UFC) is the world's premier mixed martial arts (MMA) promotion. The world's best fighters compete to call themsevles UFC champions.
-
-The sport is relatively new, and the rules are still evolving. One common area of controversy is the quality of judging in the UFC. There are three main ways a figher can win:
-
-- **Submission** - Occurs when one opponent verbally submits or taps (e.g. rear naked choke).
-- **Technical knockout (TKO)** - Occurs when the referee stops the fight because they have determined one fighter can no longer defend himself (e.g. punch to the face).
-- **Judges score card** - Occurs when the fight lasts for all scheduled rounds. A panel of three judges scores the fight using a 10 point system. The fighter with more points is deemed the winner.
-
-*Note there are several other possible ways to win including "technical decision", "disqualification", and "forfeit". However these situations are rarely occur.*
-
-```{r win_methods}
-ufc <- ufc %>%
-  mutate(win_method_bin = case_when(
-    str_detect(win_method, "DEC") ~ "Judge's Decision",
-    str_detect(win_method, "TKO") ~ "Technical Knock Out (TKO)",
-    str_detect(win_method, "SUB") ~ "Submission",
-    TRUE ~ "Other")
-  )
-
-df_win_types <- as_tibble(janitor::tabyl(ufc, win_method_bin))
-
-fig_win_types <- ggplot(df_win_types, aes(x = win_method_bin, y = percent)) +
-  geom_col(fill = colours$blue) +
-  scale_y_continuous(labels = scales::percent) +
-  labs(title = "How do UFC Fights End?",
-       subtitle = paste0("All fights from ", first_date, " to ", last_date),
-       x = "Win Method",
-       y = element_blank())
-                   
-percent_finish <- df_win_types %>% 
-  filter(win_method_bin == "Technical Knock Out (TKO)" | win_method_bin == "Submission") %>%
-  select(percent) %>%
-  pull() %>%
-  sum()
-
-percent_judges <- df_win_types %>% 
-  filter(win_method_bin == "Judge's Decision") %>%
-  select(percent) %>%
-  pull()
-```
-
-A slim majority of fights end with a technical knock out (TKO), or a submission (`r percent_finish * 100`%). But many fights (`r percent_judges * 100`%) also go to the judges score cards.
-
-```{r win_methods_fig}
-fig_win_types
-```
-
-Given that `r round(percent_finish * 100, 0)`% of fights are determined by the judges, there is no doubt judging is a very important aspect of the sport. A fighter often finds their
-
-The results of fights that do go the distance can be controversial. UFC personalities and fighters often take to the web after fights to complain about poor judging decisions:
-
--  [The Bleacher Report's 10 Most Controversial Judging Decisions in UFC History (2014)](https://bleacherreport.com/articles/2072171-the-10-most-controversial-judging-decisions-in-ufc-history#slide0)
-- [UFC commentator Joe Rogan on the issues with judging](https://www.youtube.com/watch?v=U8ZO5k5Gykk)
-
-
-### How does judging work?
-
-The system is somewhat confusing, but here are the basics:
-
-- Judges score each round on a "*10-Point Must System*".
-
-- The fighter deemed to have won the round receives 10 points.
-
-- The fighter deemed to have lost the round receives 9 points or fewer.
-
-- The figher with the most points at the end of the fight wins.
-
-- The [official MMA rules](http://www.abcboxing.com/wp-content/uploads/2016/08/juding_criteriascoring_rev0816.pdf) describe scoring as follows:
-
-  > - "*A 10 –10 round in MMA is when both fighters have competed for whatever duration of time in the round and there is no difference or advantage between either fighter.*”
-  > - “*A 10 –9 Round in MMA is when one combatant wins the round by a close margin.*”
-  > - ""*A 10 –8 Round in MMA is when one fighter wins the round by a large margin.*"
-
-- The official rules also provide additional guidance on what constitutes winning. Some examples include:
-
-  > - "*Effective Striking/Grappling shall be considered the first priority of round assessments. Effective Aggressiveness is a ‘Plan B’ and should not be considered unless the judge does not see ANY advantage in the Effective Striking/Grappling realm. Cage/Ring Control (‘Plan C’) should only be needed when ALL other criteria are 100% even for both competitors. This will be an extremely rare occurrence.*"
-  > - "*Legal blows that have immediate or cumulative impact with the potential to contribute towards the end of the match with the IMMEDIATE weighing in more heavily than the cumulative impact.*"
-
-Based on a reading of the rules and general consensus from MMA personalities, it is clear that judging is very subjective. This analysis seeks to understand whether the judging is fair.
-
-
-### How to assess if judging is fair?
-
-Fairness is very subjective, so their is no "*right*" way to assess fairness. But by using the rules and some statistical techniques we can get a better idea if the judges are applying the rules consistently (and therefore fairly).
-
-For each fight, the UFC records some statistics:
-
-- **Striking**: The number of strikes landed by a fighter
-- **Takedowns**: The number of successful takedowns scored by a fighter
-- **Submission**: The number of submissions attempted by a fighter
-- **Pass**: The number of successful passes by a fighter
-
-If the judges are being fair, they should consistetly award the same behaviour. For example, if a fighter throws *x*% more strikes than their opponent, than most of the time they should win.
-
-Using the data, we can explore how each of these indicators is related with winning:
-
-```{r striking_plot, warning=FALSE}
-
-ufc <- ufc %>%
-  mutate(event_name_fighters = paste0(event_name, ": ", fighter_1_name, " vs. ", fighter_2_name)) %>%
-  mutate(event_name_fighters = stringr::str_replace_all(event_name_fighters, "_", " ")) %>%
-  mutate(event_name_fighters = stringr::str_replace_all(event_name_fighters, "-", " - "))
 
 #' Compare two features
 #'
@@ -233,17 +114,82 @@ feature_comparison_plot <- function(ufc, feature_1, feature_2, title, x_axis_tit
   
   fig <- df %>%
     ggplot(aes(x = feature, y = result)) +
-    geom_jitter(height = 1/4, colour = colours_2$blue) +
-    # geom_violin(fill = colours_2$blue, colour = colours_2$green) +
-    geom_boxplot(width = 2/6, outlier.shape = NA, colour = colours_2$purple,
-                 fill = colours_2$grey) +
+    geom_jitter(height = 1/4, colour = colours$blue) +
+    geom_boxplot(width = 2/6, outlier.shape = NA, colour = colours$purple,
+                 fill = colours$grey) +
     labs(title = title,
          x = x_axis_title,
          y = element_blank())
 
   fig
 }
+```
 
+When a UFC match ends with a knock-out or submission there is usually never any doubt who the better fighter was. But only `r percent_finish * 100`% of fights end so decisvely. The other `r percent_judges * 100` of fights go to the judges score cards.
+
+```{r win types plot}
+fig_win_types
+```
+
+At least when the fights do go to the judges scorecard, it appears that the judges are usually pretty confident. The judges are unanimous in their decision`r percent_unanimous * 100`% of the time.
+
+```{r}
+fig_judge_outcomes
+```
+
+But, judging is tricky business. It is frequenly the subject of public scrutiny:
+
+- [The Bleacher Report's 10 Most Controversial Judging Decisions in UFC History (2014)](https://bleacherreport.com/articles/2072171-the-10-most-controversial-judging-decisions-in-ufc-history#slide0)
+- [UFC commentator Joe Rogan on the issues with judging](https://www.youtube.com/watch?v=U8ZO5k5Gykk)
+
+How can we assess if the judging if fair? Are the judges really selecting the better fighter? Are they correctly applying the UFC rules to select the winner?
+
+### Assessing fairness
+
+To answer this question we must first understand what the rules are. How are the judges supposed to pick a winner? Then tools from statistics can be used to see what the judges actually are looking at.
+
+#### What are the rules?
+
+The system is somewhat confusing, but here are the basics:
+
+- Judges score each round on a "*10-Point Must System*".
+  - The fighter deemed to have won the round receives 10 points.
+  - The fighter deemed to have lost the round receives 9 points or fewer.
+  - The figher with the most points at the end of the fight wins.
+- The [official MMA rules](http://www.abcboxing.com/wp-content/uploads/2016/08/juding_criteriascoring_rev0816.pdf) describe scoring as follows:
+  > - "*A 10 –10 round in MMA is when both fighters have competed for whatever duration of time in the round and there is no difference or advantage between either fighter.*”
+  > - “*A 10 –9 Round in MMA is when one combatant wins the round by a close margin.*”
+  > - ""*A 10 –8 Round in MMA is when one fighter wins the round by a large margin.*"
+
+The official rules also provide additional guidance on what constitutes winning. Some examples include:
+  > - "*Effective Striking/Grappling shall be considered the first priority of round assessments. Effective Aggressiveness is a ‘Plan B’ and should not be considered unless the judge does not see ANY advantage in the Effective Striking/Grappling realm. Cage/Ring Control (‘Plan C’) should only be needed when ALL other criteria are 100% even for both competitors. This will be an extremely rare occurrence.*"
+  > - "*Legal blows that have immediate or cumulative impact with the potential to contribute towards the end of the match with the IMMEDIATE weighing in more heavily than the cumulative impact.*"
+
+#### What are the judges scoring?
+
+We can never know what was really going on in a judges head. But by using the data from every UFC fight, we can identify which features are strongly correlated with winning or losing.
+
+Logistic regression will be used to model the data. Logistic regression will assign a weight to each feature, with larger weights signalling greater importance. My hypothesis is that if the judging is fair, the weights assigned by logistic regression should be aligned with what the judges are supposed to score.
+
+For example, based on my reading of the rules *effective striking* should be very important criteria for a judge in selecting the winner. Although there is no perfect way to report effective striking as a single number, the number of strikes thrown is probably a close proxy.
+
+The data collected has several features including:
+
+- `str` - The number of strikes landed
+- `td` - The number of take-downs
+- `sub` - The number of submissions
+- `pass` - The number of passes
+
+```{r preview of data}
+ufc %>% 
+  select(matches("1|2"), winner) %>%
+  head() %>%
+  knitr::kable(caption = "Example of UFC data")
+```
+
+If the model is to work, we would expect to see that more strikes, take-downs, submissions, and passes is correlated with winning. For each feature, we can plot the relationship to visually compare.
+
+```{r striking_plot, warning=FALSE}
 fig_striking <- feature_comparison_plot(
   ufc,
   feature_1 = fighter_1_str,
@@ -256,24 +202,14 @@ fig_striking <- feature_comparison_plot(
 fig_striking
 ```
 
-
-```{r}
-fig_striking_twitter <- fig_striking + 
-  theme(plot.margin = unit(c(0.5,1,1.3,0.5), "cm")) +
-  labs(caption = "Created by Sam Edwardes\n(2020)")
-
-ggsave("~/downloads/striking_tiwwtter.png", fig_striking_twitter, height = 5)
-```
-
-
 ```{r takedowns plot, warning=FALSE}
 fig_td<- feature_comparison_plot(
   ufc,
   feature_1 = fighter_1_td,
   feature_2 = fighter_2_td,
   title = "Do Judges Reward Takedowns?",
-  x_axis_title = "Standardized Number of Takedowns",
-  scale = TRUE
+  x_axis_title = "Number of Takedowns",
+  scale = FALSE
 )
 
 fig_td
@@ -285,8 +221,8 @@ fig_pass<- feature_comparison_plot(
   feature_1 = fighter_1_pass,
   feature_2 = fighter_2_pass,
   title = "Do Judges Reward Passes?",
-  x_axis_title = "Standardized Number of Passes",
-  scale = TRUE
+  x_axis_title = "Number of Passes",
+  scale = FALSE
 )
 
 fig_pass
@@ -298,10 +234,159 @@ fig_subs<- feature_comparison_plot(
   feature_1 = fighter_1_sub,
   feature_2 = fighter_2_sub,
   title = "Do Judges Reward Submissions?",
-  x_axis_title = "Standardized Number of Sumbissions",
-  scale = TRUE
+  x_axis_title = "Number of Sumbissions",
+  scale = FALSE
 )
 
-fig_subs + theme(plot.margin = unit(c(1,1,1,1), "cm"))
+fig_subs 
 ```
+
+For striking, take-downs, and passes it appears that at least visually the better performing fighter usually wins. The relationship between submissions and winning is not as clear.
+
+To better understand the relationship we can review the results of the logistic regression model.
+
+```{r fit logistic regression}
+set.seed(1993)
+
+ufc_clean <- ufc %>%
+  filter(win_method_bin == "Judge's Decision")
+
+# shuffle the data so the winner is not always fighter_1
+ufc_clean$colour_win <-sample(c("blue", "red"), nrow(ufc_clean), 
+                              prob = c(0.5, 0.5), replace = TRUE)
+
+ufc_clean <- ufc_clean %>%
+  mutate(
+    blue_str = if_else(colour_win == "blue", fighter_1_str, fighter_2_str),
+    red_str = if_else(colour_win == "red", fighter_1_str, fighter_2_str),
+    blue_td = if_else(colour_win == "blue", fighter_1_td, fighter_2_td),
+    red_td = if_else(colour_win == "red", fighter_1_td, fighter_2_td),
+    blue_sub = if_else(colour_win == "blue", fighter_1_sub, fighter_2_sub),
+    red_sub = if_else(colour_win == "red", fighter_1_sub, fighter_2_sub),
+    blue_pass = if_else(colour_win == "blue", fighter_1_pass, fighter_2_pass),
+    red_pass = if_else(colour_win == "red", fighter_1_pass, fighter_2_pass),
+    blue_win = if_else(colour_win == "blue", 1, 0),
+    blue_win = as.factor(blue_win)
+  )
+  
+
+# train test split
+train_index <- sample(seq_len(nrow(ufc_clean)), size = nrow(ufc_clean) * 0.8)
+train <- ufc_clean[train_index, ]
+test <- ufc_clean[-train_index, ]
+
+# centre and scale the data
+rec <- recipe(
+  blue_win ~ blue_str + red_str + blue_td + red_td + blue_sub + red_sub + blue_pass + red_pass, 
+  data = train
+)
+
+norm_trans <- rec %>%
+  step_normalize(
+    blue_str, red_str, blue_td, red_td, blue_sub, red_sub, blue_pass, red_pass
+  )
+
+norm_obj <- prep(norm_trans, training = train)
+train_clean <- bake(norm_obj, train)
+test_clean <- bake(norm_obj, test)
+
+
+# fit logistic regression model
+fit <- glm(
+  blue_win ~ blue_str + red_str + blue_td + red_td + blue_sub + red_sub + blue_pass + red_pass,
+  data = train_clean, family = "binomial"
+)
+
+broom::tidy(fit) %>%
+  mutate(significant = if_else(p.value < 0.05, TRUE, FALSE)) %>%
+  knitr::kable(caption = "Logistic Regression")
+```
+
+The table above can help us finally answer the question "is UFC judging fair?". The results of the logistic regresion reveal that:
+
+- As you might expect, the most important feature is striking. The more strikes you can land, the more likely you are to win over your oppontent. Conversely, the more you get hit, the more likely you are to loose.
+- The next most important feature associated with winning are passes, and then takedowns.
+- The next most important features associated with losing are also passes, then takedowns.
+- Submissions were identified as not being statistically significant with at significance level of 0.05.
+
+We can think of the results of the logistic regression as a proxy for what judges actually care about. Further we can test the model to see how will it generalizes to the actual data.
+
+When I fit the model above I used a random sample of 80% of the fights. We can test how well the model generalizes to the remaining 20% of the data by generarting predictions. A high prediction accuracy would suggest fair judging. Or at least judging that is applied consistently.
+
+```{r test model on test data}
+train_predictions <- predict(fit, 
+                            newdata = train_clean, 
+                            type = "response") %>%
+  round(0)
+
+test_predictions <- predict(fit, 
+                            newdata = test_clean, 
+                            type = "response") %>%
+  round(0)
+
+train_accuracy <- mean(train_predictions == train_clean$blue_win, na.rm = TRUE)
+test_accuracy <- mean(test_predictions == test_clean$blue_win, na.rm = TRUE)
+```
+
+On the training data, the model accurately predicts the correct winner `r train_accuracy * 100`% of the time. On the test data the model accurately predicts the correct winner `r test_accuracy * 100`% of the time.
+
+## Conclusion
+
+So is the UFC fair? The analysis above is an attempt to answer the question, but I think the results are far from conclusive.
+
+- Does rewarding striking, passes, and take-downs in that order align with judging rules?
+- Is `r test_accuracy * 100`% accuracy good enough?
+- Are there other confounding variables that judges are considering that are not present in the model (fighter size, reputation, past record, audience reaction, etc.)?
+
+Personally, I think this analysis provides some comfort that the judging is not terrible. If you land more strikes, you will probably win. If you earn more takedowns, and do a better job of passing guard you will probably win. 
+
+But I do not know if `r test_accuracy * 100`% is good enough. How do judges explain the biggest outliers?
+
+```{r}
+train$prediction <- train_predictions
+train$prediction_proba <- predict(fit, newdata = train_clean, type = "response")
+test$prediction <- test_predictions
+test$prediction_proba <- predict(fit, newdata = test_clean, type = "response")
+
+ufc_out <- bind_rows(train, test) %>%
+  mutate(correct = prediction == blue_win)
+```
+
+For example here are the 10 fights that the model was most confident about, but predicted the wrong result.
+
+```{r}
+ufc_out %>%
+  filter(correct == FALSE) %>%
+  mutate(prediction_proba = if_else(prediction_proba > 0.5, 
+                                    prediction_proba,
+                                    prediction_proba + 0.5)) %>%
+  arrange(desc(prediction_proba)) %>%
+  select(event_name_fighters, colour_win:correct) %>%
+  knitr::kable()
+```
+
+What happened in these fights that the fighter was able to win, while performing poorly on striking, takedowns, and passes? Is it poor judging, or something that can't be observed in the data we have?
+
+---
+
+## Notes
+
+- You can find the complete code behind the analysis here: https://github.com/SamEdwardes/ufc-fairness/blob/master/blog/is_the_ufc_fair.Rmd.
+- The logistic regression model is useless for picking fights before they occur, because it is using data that can only be observed after the fight occured. So it cannot help any gamblers out there looking for an edge.
+- The data used can be found here: https://github.com/SamEdwardes/ufc-data.
+- At the time this post was created, the analysis was based on `r paste0("all fights from ", first_date, " to ", last_date)`.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
