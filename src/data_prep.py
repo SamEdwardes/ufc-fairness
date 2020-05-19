@@ -92,6 +92,19 @@ def pivot_longer(df):
 
     return df_long
 
+def pivot_wider(df_long):
+    df = df_long.pivot_table(index=['fight_id', 'colour']).unstack()
+    df = df[['wins', 'losses', 'total_octagon_time', 'total_tko_recieved', 'days_since_last_fight', 
+            'last_fight_tko_received', 'last_fight_win', 'last_fight_loss', 'last_fight_time', 'blue_win']]
+    df.columns = ['_'.join(col).strip() for col in X_.columns.values]
+    df['blue_win'] =X_['blue_win_blue']
+    df = df.drop(columns=['blue_win_blue', 'blue_win_red'])
+    df = df.reset_index()
+
+
+    return df
+
+
 
 def win_method_binner(x):
     """Categorize win methods into bins."""
@@ -127,19 +140,25 @@ def calculate_running_totals(df_long):
     df_long = df_long.sort_values(by=['name', 'date'])
     df_long = df_long.reset_index(drop=True)
     df_long['win_method_bin'] = df_long['win_method'].apply(win_method_binner)
-    df_long['num_fights'] = df_long.groupby('name')['event_name'].cumcount() + 1
+    df_long['num_fights'] = df_long.groupby('name')['event_name'].cumcount()
     df_long['wins'] = df_long.groupby('name')['winner'].cumsum()
+    df_long['wins'] = df_long.groupby('name')['wins'].shift().fillna(0).astype(int)
     df_long['losses'] = df_long.groupby('name')['loser'].cumsum()
+    df_long['losses'] = df_long.groupby('name')['losses'].shift().fillna(0).astype(int)
     df_long['days_since_last_fight'] = df_long.groupby('name')['date'].diff().dt.days.fillna(0)
     df_long['tko_recieved'] = df_long.apply(lambda x: 1 if x['winner'] == 0 and x['win_method_bin'] == "TKO" else 0, axis=1)
     df_long['total_tko_recieved'] = df_long.groupby('name')['tko_recieved'].cumsum()
+    df_long['total_tko_recieved'] = df_long.groupby('name')['total_tko_recieved'].shift().fillna(0).astype(int)
     df_long['fight_time'] = df_long.apply(lambda x: (x['win_round'] - 1) * 5 + float(x['win_time'][-2])/60 + float(x['win_time'][0]), axis=1)
     df_long['total_octagon_time'] = df_long.groupby('name')['fight_time'].cumsum()
+    df_long['total_octagon_time'] = df_long.groupby('name')['total_octagon_time'].shift().fillna(0)
     df_long['last_fight_time'] = df_long.groupby('name')['fight_time'].shift(periods=1).fillna(0)
     df_long['last_fight_tko_received'] = df_long.groupby('name')['tko_recieved'].shift(periods=1).fillna(0).astype(int)
     df_long['last_fight_win'] = df_long.groupby('name')['winner'].shift(periods=1).fillna(0).astype(int)
     df_long['last_fight_loss'] = df_long.groupby('name')['loser'].shift(periods=1).fillna(0).astype(int)
     # df_long['win_streak'] = np.NaN
     # df_long['loss_streak'] = np.NaN 
+
+    df_long = df_long.drop(columns=['tko_recieved'])
 
     return df_long
