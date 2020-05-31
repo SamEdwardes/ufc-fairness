@@ -136,12 +136,10 @@ standard deviation increase in the number of strikes landed by blue,
 they increase their **log odds** of winning by 2.28. Another way to
 interpret the coefficient is that for each additional 1 standard
 deviation increase in the number of strikes landed by blue, they
-increase their **odds** of winning by 877.67%
-(\((e^{2.28} - 1) * 100\)). The p-value tells us whether or not each
-coefficient is statistically significant (smaller p-values mean the
-model is more confident the relationship is not due to chance).
-
-    ## [1] 878
+increase their **odds** of winning by 877.67% (*(e^2.28 - 1) x 100*).
+The p-value tells us whether or not each coefficient is statistically
+significant (smaller p-values mean the model is more confident the
+relationship is not due to chance).
 
 The table above can help us finally answer the question “is UFC judging
 fair?”. The results of the logistic regression reveal that:
@@ -228,24 +226,10 @@ doing an OK job. If you land more strikes, you will probably win. If you
 earn more take-downs, and do a better job of passing guard you will
 probably win.
 
-But I do not know if 85.32% consistency is good enough. For example how
-would the judges explain the results of these fights which were the
-biggest statistical anamolies?
-
-For example here are the 5 fights that the model was most confident
-about, but predicted the wrong result.
-
-| event                                                                   | blue             | red                | winner | blue\_str | red\_str | blue\_td | red\_td | blue\_sub | red\_sub | blue\_pass | red\_pass | prediction\_proba | correct |
-| :---------------------------------------------------------------------- | :--------------- | :----------------- | :----- | --------: | -------: | -------: | ------: | --------: | -------: | ---------: | --------: | ----------------: | :------ |
-| UFC Fight Night - Machida vs Mousasi: Lyoto Machida vs. Gegard Mousasi  | Lyoto Machida    | Gegard Mousasi     | blue   |        28 |       36 |        1 |       0 |         0 |        0 |          2 |         0 |              1.00 | FALSE   |
-| UFC on FX - Alves vs Kampmann: Costas Philippou vs. Court McGee         | Costas Philippou | Court McGee        | blue   |        60 |       58 |        0 |       0 |         0 |        0 |          0 |         0 |              1.00 | FALSE   |
-| UFC 42 - Sudden Impact: Hermes Franca vs. Richard Crunkilton            | Hermes Franca    | Richard Crunkilton | blue   |        27 |       29 |        2 |       4 |         9 |        0 |          0 |         0 |              1.00 | FALSE   |
-| UFC 39 - The Warriors Return: Matt Lindland vs. Ivan Salaverry          | Matt Lindland    | Ivan Salaverry     | blue   |        16 |       32 |        6 |       0 |         0 |        0 |          0 |         1 |              1.00 | FALSE   |
-| UFC Fight Night - Condit vs Kampmann: Jorge Rivera vs. Nissen Osterneck | Jorge Rivera     | Nissen Osterneck   | blue   |        29 |       35 |        4 |       1 |         0 |        1 |          1 |         2 |              0.99 | FALSE   |
-
-What happened in these fights that a fighter was able to win while
-performing poorly on striking, take-downs, and passes? Is it poor
-judging, or something that can’t be observed in the data we have?
+But I do not know if 85.32% consistency is good enough. Is it poor
+judging, or something that cannot be observed in the data we have?
+Hopefully further analysis and the collection of additional data can
+help better answer this question.
 
 -----
 

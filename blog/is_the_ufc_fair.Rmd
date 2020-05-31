@@ -318,12 +318,7 @@ broom::tidy(fit) %>%
   knitr::kable()
 ```
 
-The table above is the output of the logistic regression model. The estimate (also known as the coefficient) tells us the effect each feature has on the odds of winning. For example, for each additional 1 standard deviation increase in the number of strikes landed by blue, they increase their **log odds** of winning by 2.28. Another way to interpret the coefficient is that for each additional 1 standard deviation increase in the number of strikes landed by blue, they increase their **odds** of winning by `r (exp(2.28) - 1) * 100`% ($(e^{2.28} - 1) * 100$). The p-value tells us whether or not each coefficient is statistically significant (smaller p-values mean the model is more confident the relationship is not due to chance).
-
-```{r}
-(exp(2.28) - 1) * 100
-```
-
+The table above is the output of the logistic regression model. The estimate (also known as the coefficient) tells us the effect each feature has on the odds of winning. For example, for each additional 1 standard deviation increase in the number of strikes landed by blue, they increase their **log odds** of winning by 2.28. Another way to interpret the coefficient is that for each additional 1 standard deviation increase in the number of strikes landed by blue, they increase their **odds** of winning by `r (exp(2.28) - 1) * 100`% (*(e^2.28 - 1) x 100*). The p-value tells us whether or not each coefficient is statistically significant (smaller p-values mean the model is more confident the relationship is not due to chance).
 
 The table above can help us finally answer the question "is UFC judging fair?". The results of the logistic regression reveal that:
 
@@ -390,39 +385,7 @@ The analysis above is an attempt to answer the question, but I think the results
 
 Personally, I think this analysis provides comfort that the judges are doing an OK job. If you land more strikes, you will probably win. If you earn more take-downs, and do a better job of passing guard you will probably win. 
 
-But I do not know if `r test_accuracy * 100`% consistency is good enough. For example how would the judges explain the results of these fights which were the biggest statistical anamolies?
-
-```{r}
-train$prediction <- train_predictions
-train$prediction_proba <- predict(fit, newdata = train_clean, type = "response")
-test$prediction <- test_predictions
-test$prediction_proba <- predict(fit, newdata = test_clean, type = "response")
-
-ufc_out <- bind_rows(train, test) %>%
-  select(-ends_with("url")) %>%
-  mutate(correct = prediction == blue_win)
-```
-
-For example here are the 5 fights that the model was most confident about, but predicted the wrong result.
-
-```{r}
-ufc_out %>%
-  filter(correct == FALSE) %>%
-  mutate(prediction_proba = if_else(prediction_proba > 0.5, 
-                                    prediction_proba,
-                                    prediction_proba + 0.5),
-         prediction = if_else(prediction == 1, "blue", "red"),
-         blue = if_else(colour_win == "blue", fighter_1_name, fighter_2_name),
-         red = if_else(colour_win == "red", fighter_1_name, fighter_2_name)) %>%
-  arrange(desc(prediction_proba)) %>%
-  head(5) %>%
-  select(event_name_fighters, blue, red, colour_win:red_pass, prediction_proba, correct) %>%
-  select(-blue_name, -red_name) %>%
-  rename(event = event_name_fighters, winner = colour_win) %>%
-  knitr::kable()
-```
-
-What happened in these fights that a fighter was able to win while performing poorly on striking, take-downs, and passes? Is it poor judging, or something that can't be observed in the data we have?
+But I do not know if `r test_accuracy * 100`% consistency is good enough. Is it poor judging, or something that cannot be observed in the data we have? Hopefully further analysis and the collection of additional data can help better answer this question.
 
 ---
 
@@ -430,17 +393,3 @@ What happened in these fights that a fighter was able to win while performing po
 
 - You can find the complete code behind the analysis here: [https://github.com/SamEdwardes/ufc-fairness/blob/master/blog/is_the_ufc_fair.Rmd](https://github.com/SamEdwardes/ufc-fairness/blob/master/blog/is_the_ufc_fair.Rmd).
 - The data used can be found here: https://github.com/SamEdwardes/ufc-data.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
