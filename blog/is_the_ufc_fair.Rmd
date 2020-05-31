@@ -6,7 +6,6 @@ output: github_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 options(digits=2)
-library(plotly) 
 library(tidyverse)
 library(modeldata)
 library(recipes)
@@ -18,9 +17,10 @@ colours <- list(blue = "#3775b7", purple = "#5737b7", green = "#37b779",
 
 ```{r data, include=FALSE}
 ufc <- read_csv(
-  "https://github.com/SamEdwardes/ufc-data/raw/master/fight_results.csv",
+  "https://github.com/SamEdwardes/ufc-data/raw/master/event_details.csv",
   col_types = cols()
 )
+
 ufc <- ufc %>%
   mutate(date = lubridate::mdy(date)) %>%
   mutate(event_name_fighters = paste0(event_name, ": ", 
@@ -42,6 +42,14 @@ ufc <- ufc %>%
     str_detect(win_method, "SUB") ~ "Submission",
     TRUE ~ "Other")
   )
+
+
+# ufc_fighter_details
+
+ufc_fighter_details <- read_csv(
+  "https://github.com/SamEdwardes/ufc-data/raw/master/fighter_details.csv",
+  col_types = cols()
+)
 
 
 # summaries
@@ -125,66 +133,56 @@ feature_comparison_plot <- function(ufc, feature_1, feature_2, title, x_axis_tit
 }
 ```
 
-When a UFC match ends with a knock-out or submission there is usually never any doubt who the better fighter was. But only `r round(percent_finish * 100)`% of fights end so decisively. The other `r round(percent_judges * 100)`% of fights go to the judges score cards.
+When a UFC match ends with a knock-out or submission there is never any doubt who the better fighter was. But only `r round(percent_finish * 100)`% of fights end with a knock-out or submission. The other `r round(percent_judges * 100)`% of fights go to the judges score cards.
 
 ```{r win types plot}
 fig_win_types
 ```
 
-At least when the fights do go to the judges scorecard, it appears that the judges are usually pretty confident. The judges are unanimous in their decision `r round(percent_unanimous * 100)`% of the time.
-
-```{r}
-fig_judge_outcomes
-```
-
-But, judging is tricky business. It is frequently the subject of public scrutiny:
+Given that the outcome of so many fights are determined by the judges their ability to fairly score a fight is an important part of the sport. One win or loss can make or break a fighter's career. But judging is tricky business. It is frequently the subject of public scrutiny:
 
 - [The Bleacher Report's 10 Most Controversial Judging Decisions in UFC History (2014)](https://bleacherreport.com/articles/2072171-the-10-most-controversial-judging-decisions-in-ufc-history#slide0)
 - [UFC commentator Joe Rogan on the issues with judging](https://www.youtube.com/watch?v=U8ZO5k5Gykk)
 
-How can we assess if the judging if fair? Are the judges really selecting the better fighter? Are they correctly applying the UFC rules to select the winner?
+How can we assess if judging in the UFC is fair? Are the judges really selecting the better performing fighter? Are they correctly applying the UFC rules to select the winner?
 
 ### Assessing fairness
 
-To answer this question we must first understand what the rules are. How are the judges supposed to pick a winner? Then tools from statistics can be used to see what the judges actually are looking at.
+To answer this question we must first understand what the rules are. How are the judges supposed to pick a winner? Then we can use statistical tools to compare what the judges are actually scoring compared to what they should be scoring.
 
 #### What are the rules?
 
-The system is somewhat confusing, but here are the basics. Judges score each round on a "*10-Point Must System*":
-
-- The fighter deemed to have won the round receives 10 points.
-- The fighter deemed to have lost the round receives 9 points or fewer.
-- The fighter with the most points at the end of the fight wins.
-
-The [official MMA rules](http://www.abcboxing.com/wp-content/uploads/2016/08/juding_criteriascoring_rev0816.pdf) describe scoring as follows:
+The system is confusing, but here are the basics. Judges score each round on a "*10-Point Must System*". The [official MMA rules](http://www.abcboxing.com/wp-content/uploads/2016/08/juding_criteriascoring_rev0816.pdf) describe scoring as follows:
 
 > - "*A 10 –10 round in MMA is when both fighters have competed for whatever duration of time in the round and there is no difference or advantage between either fighter.*”
 > - “*A 10 –9 Round in MMA is when one combatant wins the round by a close margin.*”
 > - ""*A 10 –8 Round in MMA is when one fighter wins the round by a large margin.*"
 
-The official rules also provide additional guidance on what constitutes winning. Some examples include:
+The official rules also provide additional guidance on what constitutes winning:
 
-> - "*Effective Striking/Grappling shall be considered the first priority of round assessments. Effective Aggressiveness is a ‘Plan B’ and should not be considered unless the judge does not see ANY advantage in the Effective Striking/Grappling realm. Cage/Ring Control (‘Plan C’) should only be needed when ALL other criteria are 100% even for both competitors. This will be an extremely rare occurrence.*"
-> - "*Legal blows that have immediate or cumulative impact with the potential to contribute towards the end of the match with the IMMEDIATE weighing in more heavily than the cumulative impact.*"
+> "*Effective Striking/Grappling shall be considered the first priority of round assessments. Effective Aggressiveness is a ‘Plan B’ and should not be considered unless the judge does not see ANY advantage in the Effective Striking/Grappling realm. Cage/Ring Control (‘Plan C’) should only be needed when ALL other criteria are 100% even for both competitors. This will be an extremely rare occurrence.*"
 
 #### What are the judges scoring?
 
-We can never know what was really going on in a judges head. But by using the data from every UFC fight, we can identify which features are strongly correlated with winning or losing.
+We can never know what was going on in a judges head. But by using the data from every UFC fight, we can identify which features are strongly correlated with winning or losing.
 
 Logistic regression will be used to model the data. Logistic regression will assign a weight to each feature, with larger weights signalling greater importance. My hypothesis is that if the judging is fair, the weights assigned by logistic regression should be aligned with what the judges are supposed to score.
 
-For example, based on my reading of the rules *effective striking* should be very important criteria for a judge in selecting the winner. Although there is no perfect way to report effective striking as a single number, the number of strikes thrown is probably a close proxy.
+For example, based on my reading of the rules *effective striking* should be very important criteria for a judge in selecting the winner. Although there is no perfect way to report effective striking as a single number, the number of strikes landed is probably a good proxy.
 
 The data collected has several features including:
 
-- `str` - The number of strikes landed
-- `td` - The number of take-downs
-- `sub` - The number of submissions
-- `pass` - The number of passes
+- `Stirkes` - The number of strikes landed
+- `Take-downs` - The number of successful take-downs
+- `Submissions` - The number of submissions attempted
+- `Pass` - The number of of guard passes
+
+Below is an example of the data:
 
 ```{r preview of data}
 ufc %>% 
   select(matches("1|2"), winner) %>%
+  select(-ends_with("_url")) %>%
   head() %>%
   knitr::kable()
 ```
@@ -192,6 +190,8 @@ ufc %>%
 #### Assessing Fairness Visually
 
 If the model is to work, we would expect to see that more strikes, take-downs, submissions, and passes is correlated with winning. For each feature, we can plot the relationship to visually compare.
+
+The box plots show the median (the purple line), and the 25th and 75th percentile (the left and right hand side of the box). Each dot represents the outcome of a fight for each fighter.
 
 ```{r striking_plot, warning=FALSE}
 fig_striking <- feature_comparison_plot(
@@ -203,23 +203,6 @@ fig_striking <- feature_comparison_plot(
   scale=FALSE
 )
 
-fig_striking
-```
-
-```{r takedowns plot, warning=FALSE}
-fig_td<- feature_comparison_plot(
-  ufc,
-  feature_1 = fighter_1_td,
-  feature_2 = fighter_2_td,
-  title = "Do Judges Reward Take-downs?",
-  x_axis_title = "Number of Take downs",
-  scale = FALSE
-)
-
-fig_td
-```
-
-```{r passes plot, warning=FALSE}
 fig_pass<- feature_comparison_plot(
   ufc,
   feature_1 = fighter_1_pass,
@@ -229,10 +212,15 @@ fig_pass<- feature_comparison_plot(
   scale = FALSE
 )
 
-fig_pass
-```
+fig_td<- feature_comparison_plot(
+  ufc,
+  feature_1 = fighter_1_td,
+  feature_2 = fighter_2_td,
+  title = "Do Judges Reward Take-downs?",
+  x_axis_title = "Number of Take-downs",
+  scale = FALSE
+)
 
-```{r subs plot, warning=FALSE}
 fig_subs<- feature_comparison_plot(
   ufc,
   feature_1 = fighter_1_sub,
@@ -242,14 +230,16 @@ fig_subs<- feature_comparison_plot(
   scale = FALSE
 )
 
-fig_subs 
+gridExtra::grid.arrange(fig_striking, fig_td, fig_pass, fig_subs)
 ```
 
-For striking, take-downs, and passes it appears that at least visually the better performing fighter usually wins. The relationship between submissions and winning is not as clear.
+For striking, take downs, and passes it appears that at least visually the better performing fighter usually wins. The relationship between submissions and winning is not as clear.
 
 #### Assessing Fairness with Logistic Regression
 
-To better understand the relationship we can review the results of the logistic regression model:
+##### Using fighter performance features
+
+To better understand the relationship between a fighters performance and the judges decision we can fit a logistic regression model to the data. The model will tell us which features in the data are the strongest predictor of the outcome. In this case, we have set the outcome to whether the blue fighter wins or losses. The first model will only use the features that the judges should consider: striking, take-downs, passes, and submissions.
 
 ```{r fit logistic regression}
 set.seed(1993)
@@ -263,6 +253,12 @@ ufc_clean$colour_win <-sample(c("blue", "red"), nrow(ufc_clean),
 
 ufc_clean <- ufc_clean %>%
   mutate(
+    # fighter details
+    blue_name = if_else(colour_win == "blue", fighter_1_name, fighter_2_name),
+    red_name = if_else(colour_win == "red", fighter_1_name, fighter_2_name),
+    blue_url = if_else(colour_win == "blue", fighter_1_url, fighter_2_url),
+    red_url = if_else(colour_win == "red", fighter_1_url, fighter_2_url),
+    # fight stats
     blue_str = if_else(colour_win == "blue", fighter_1_str, fighter_2_str),
     red_str = if_else(colour_win == "red", fighter_1_str, fighter_2_str),
     blue_td = if_else(colour_win == "blue", fighter_1_td, fighter_2_td),
@@ -274,6 +270,16 @@ ufc_clean <- ufc_clean %>%
     blue_win = if_else(colour_win == "blue", 1, 0),
     blue_win = as.factor(blue_win)
   )
+
+ufc_clean <- ufc_clean %>%
+  left_join(
+    ufc_fighter_details %>% rename_all(list(~ paste0('blue_', .))), 
+    by = c("blue_url" = "blue_fighter_url")
+  ) %>% 
+  left_join(
+    ufc_fighter_details %>% rename_all(list(~ paste0('red_', .))), 
+    by = c("red_url" = "red_fighter_url")
+  )
   
 
 # train test split
@@ -281,9 +287,9 @@ train_index <- sample(seq_len(nrow(ufc_clean)), size = nrow(ufc_clean) * 0.8)
 train <- ufc_clean[train_index, ]
 test <- ufc_clean[-train_index, ]
 
-# centre and scale the data
+# center and scale the data
 rec <- recipe(
-  blue_win ~ blue_str + red_str + blue_td + red_td + blue_sub + red_sub + blue_pass + red_pass, 
+  blue_win ~ blue_str + red_str + blue_td + red_td + blue_sub + red_sub + blue_pass + red_pass + blue_height_inches + red_height_inches + blue_weight_lbs + red_weight_lbs + blue_reach_inches + red_reach_inches,
   data = train
 )
 
@@ -302,20 +308,30 @@ fit <- glm(
   blue_win ~ blue_str + red_str + blue_td + red_td + blue_sub + red_sub + blue_pass + red_pass,
   data = train_clean, family = "binomial"
 )
+```
 
+```{r}
 broom::tidy(fit) %>%
   mutate(significant = if_else(p.value < 0.05, TRUE, FALSE)) %>%
+  select(term, estimate, p.value) %>%
+  filter(term != "(Intercept)") %>%
   knitr::kable()
 ```
 
+The table above is the output of the logistic regression model. The estimate (also known as the coefficient) tells us the effect each feature has on the odds of winning. For example, for each additional 1 standard deviation increase in the number of strikes landed by blue, they increase their **log odds** of winning by 2.28. Another way to interpret the coefficient is that for each additional 1 standard deviation increase in the number of strikes landed by blue, they increase their **odds** of winning by `r (exp(2.28) - 1) * 100`% ($(e^{2.28} - 1) * 100$). The p-value tells us whether or not each coefficient is statistically significant (smaller p-values mean the model is more confident the relationship is not due to chance).
+
+```{r}
+(exp(2.28) - 1) * 100
+```
+
+
 The table above can help us finally answer the question "is UFC judging fair?". The results of the logistic regression reveal that:
 
-- As you might expect, the most important feature is striking. The more strikes you can land, the more likely you are to win over your opponent. Conversely, the more you get hit, the more likely you are to lose.
-- The next most important feature associated with winning are passes, and then take-downs.
-- The next most important features associated with losing are also passes, then take-downs.
-- Submissions were identified as not being statistically significant with at significance level of 0.05.
+- As you might expect, the **most important feature is striking**. The more strikes you can land, the more likely you are to win over your opponent. Conversely, the more you get hit, the more likely you are to lose.
+- The next most important feature associated with winning are **passes**, and then **take-downs**.
+- **Submissions** were identified as not being statistically significant at significance level of 0.05.
 
-We can think of the results of the logistic regression as a proxy for what judges actually care about. Further we can test the model to see how will it generalizes to the actual data.
+We can think of the results of the logistic regression as a proxy for what judges actually care about. Further we can test the model to see how well it generalizes to the actual data.
 
 When I fit the model above I used a random sample of 80% of the fights. We can test how well the model generalizes to the remaining 20% of the data by generating predictions. A high prediction accuracy would suggest fair judging. Or at least judging that is applied consistently.
 
@@ -336,17 +352,45 @@ test_accuracy <- mean(test_predictions == test_clean$blue_win, na.rm = TRUE)
 
 On the training data, the model accurately predicts the correct winner `r train_accuracy * 100`% of the time. On the test data the model accurately predicts the correct winner `r test_accuracy * 100`% of the time.
 
+##### Using other features
+
+The model that was fit above used only features that the judges should use to make their decision. What will happen to the model if we add data that the judges should not be considering, but could influence their decision? For example will a fighter being taller bias the judges to reward them based on their appearance?
+
+To test this theory we can fit the same model as before, but this time add three additional features: weight, height, and reach. If the judges are being fair, theses features should not effect the outcome of the fight.
+
+```{r}
+fit2 <- glm(
+  blue_win ~ blue_str + red_str + blue_td + red_td + blue_sub + red_sub + blue_pass + red_pass + blue_height_inches + red_height_inches + blue_weight_lbs + red_weight_lbs + blue_reach_inches + red_reach_inches,
+  data = train_clean, family = "binomial"
+)
+
+broom::tidy(fit2) %>%
+  mutate(significant = if_else(p.value < 0.05, TRUE, FALSE)) %>%
+  select(term, estimate, p.value) %>%
+  filter(term != "(Intercept)") %>%
+  knitr::kable()
+```
+
+Interestingly, the three "unfair" features are all considered the least important. They have a small coefficient, and a high p-value suggesting that these variables are not good predictors. This can give us some comfort that the judges are actually only considering fighter performance.
+
 ## Conclusion
 
-So is the UFC fair? The analysis above is an attempt to answer the question, but I think the results are far from conclusive.
+So is the UFC fair? 
+
+- Judges do reward striking, passes.
+- Judges do not reward submission attempts.
+- Judges do not reward height, reach, or weight.
+- `r test_accuracy * 100`% of the times the judges are applying the rules consistently.
+
+The analysis above is an attempt to answer the question, but I think the results are far from conclusive:
 
 - Does rewarding striking, passes, and take-downs in that order align with judging rules?
-- Is `r test_accuracy * 100`% accuracy good enough?
-- Are there other confounding variables that judges are considering that are not present in the model (fighter size, reputation, past record, audience reaction, etc.)?
+- Is `r test_accuracy * 100`% consistency good enough?
+- Are there other confounding variables that judges are considering that are not present in the model (fighter reputation, audience reaction, etc.)?
 
-Personally, I think this analysis provides some comfort that the judging is not terrible. If you land more strikes, you will probably win. If you earn more take-downs, and do a better job of passing guard you will probably win. 
+Personally, I think this analysis provides comfort that the judges are doing an OK job. If you land more strikes, you will probably win. If you earn more take-downs, and do a better job of passing guard you will probably win. 
 
-But I do not know if `r test_accuracy * 100`% is good enough. How do judges explain the biggest outliers?
+But I do not know if `r test_accuracy * 100`% consistency is good enough. For example how would the judges explain the results of these fights which were the biggest statistical anamolies?
 
 ```{r}
 train$prediction <- train_predictions
@@ -355,6 +399,7 @@ test$prediction <- test_predictions
 test$prediction_proba <- predict(fit, newdata = test_clean, type = "response")
 
 ufc_out <- bind_rows(train, test) %>%
+  select(-ends_with("url")) %>%
   mutate(correct = prediction == blue_win)
 ```
 
@@ -371,21 +416,20 @@ ufc_out %>%
          red = if_else(colour_win == "red", fighter_1_name, fighter_2_name)) %>%
   arrange(desc(prediction_proba)) %>%
   head(5) %>%
-  select(event_name_fighters, blue, red, colour_win:correct) %>%
+  select(event_name_fighters, blue, red, colour_win:red_pass, prediction_proba, correct) %>%
+  select(-blue_name, -red_name) %>%
+  rename(event = event_name_fighters, winner = colour_win) %>%
   knitr::kable()
 ```
 
-What happened in these fights that the fighter was able to win, while performing poorly on striking, take-downs, and passes? Is it poor judging, or something that can't be observed in the data we have?
+What happened in these fights that a fighter was able to win while performing poorly on striking, take-downs, and passes? Is it poor judging, or something that can't be observed in the data we have?
 
 ---
 
-### Notes
+### Reference
 
-- You can find the complete code behind the analysis here: https://github.com/SamEdwardes/ufc-fairness/blob/master/blog/is_the_ufc_fair.Rmd.
-- The logistic regression model is useless for picking fights before they occur, because it is using data that can only be observed after the fight occurred. So it cannot help any gamblers out there looking for an edge.
+- You can find the complete code behind the analysis here: [https://github.com/SamEdwardes/ufc-fairness/blob/master/blog/is_the_ufc_fair.Rmd](https://github.com/SamEdwardes/ufc-fairness/blob/master/blog/is_the_ufc_fair.Rmd).
 - The data used can be found here: https://github.com/SamEdwardes/ufc-data.
-- At the time this post was created, the analysis was based on `r paste0("all fights from ", first_date, " to ", last_date)`.
-
 
 
 

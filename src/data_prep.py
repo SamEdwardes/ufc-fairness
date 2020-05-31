@@ -81,13 +81,18 @@ def pivot_longer(df):
     df_long['sub'] = df_long.apply(lambda x: x['blue_sub'] if x['colour'] == 'blue' else  x['red_sub'], axis=1)
     df_long['pass'] = df_long.apply(lambda x: x['blue_pass'] if x['colour'] == 'blue' else  x['red_pass'], axis=1)
 
+    df_long['str_against'] = df_long.apply(lambda x: x['blue_str'] if x['colour'] == 'red' else  x['red_str'], axis=1)
+    df_long['td_against'] = df_long.apply(lambda x: x['blue_td'] if x['colour'] == 'red' else  x['red_td'], axis=1)
+    df_long['sub_against'] = df_long.apply(lambda x: x['blue_sub'] if x['colour'] == 'red' else  x['red_sub'], axis=1)
+    df_long['pass_against'] = df_long.apply(lambda x: x['blue_pass'] if x['colour'] == 'red' else  x['red_pass'], axis=1)
+
     df_long['winner'] = df_long.apply(lambda x: 1 if x['winner_colour'] == x['colour'] else 0, axis=1)
     df_long['loser'] = df_long.apply(lambda x: 1 if x['winner_colour'] != x['colour'] else 0, axis=1)
 
     df_long = df_long[[
         'event_name', 'fight_id', 'date', 'weight_class', 'win_method', 
         'win_round',  'win_time',  'name', 'fighter_url', 'colour',  'str', 
-        'td', 'sub', 'pass',  'winner', 'loser', 'blue_win'
+        'td', 'sub', 'pass', 'str_against', 'winner', 'loser', 'blue_win'
     ]]
 
     return df_long
@@ -156,9 +161,13 @@ def calculate_running_totals(df_long):
     df_long['last_fight_tko_received'] = df_long.groupby('name')['tko_recieved'].shift(periods=1).fillna(0).astype(int)
     df_long['last_fight_win'] = df_long.groupby('name')['winner'].shift(periods=1).fillna(0).astype(int)
     df_long['last_fight_loss'] = df_long.groupby('name')['loser'].shift(periods=1).fillna(0).astype(int)
+    df_long['last_fight_str_against'] = df_long.groupby('name')['str_against'].shift(periods=1).fillna(0)
+    df_long['total_str'] = df_long.groupby('name')['str'].cumsum()
+    df_long['total_str'] = df_long.groupby('name')['total_str'].shift().fillna(0)
+    df_long['total_str_against'] = df_long.groupby('name')['str_against'].cumsum()
+    df_long['total_str_against'] = df_long.groupby('name')['total_str_against'].shift().fillna(0)
     # df_long['win_streak'] = np.NaN
     # df_long['loss_streak'] = np.NaN 
 
-    df_long = df_long.drop(columns=['tko_recieved'])
 
     return df_long
